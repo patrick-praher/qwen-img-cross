@@ -12,10 +12,16 @@ toolkit. The backend binary and the model weights are downloaded on first use.
 * Reads the prompt **interactively**, from the **command line**, from a
   **file** (one prompt per line) or from **stdin**
 
+> [!NOTE]
+> **Tested on macOS (Apple silicon, Metal) only.** The Windows and Linux paths
+> are implemented but have not yet been run on real hardware — see
+> [Platform status](#platform-status). Reports from either are very welcome.
+
 ## Quick start
 
 ```sh
-git clone <this repo> && cd image-from-text-tool
+git clone https://github.com/patrick-praher/qwen-img-cross
+cd qwen-img-cross
 
 python3 qwenimg.py setup                       # download backend + weights (~11 GB)
 python3 qwenimg.py --turbo "a red fox curled up in deep snow, soft winter light"
@@ -178,14 +184,36 @@ Generation parameters are also embedded in each PNG; read them back with
 | `QWENIMG_CONNECTIONS` | parallel download connections (default 4) |
 | `HF_TOKEN` | Hugging Face token, for gated or rate-limited repos |
 
+## Platform status
+
+| Platform | Backend | Status |
+| --- | --- | --- |
+| macOS, Apple silicon | Metal | Verified end to end on an M5 (32 GB) |
+| macOS, Intel | Metal / CPU | Not run. The macOS archive is a universal binary (`x86_64 arm64` confirmed with `lipo`), so it should execute; Metal coverage on Intel GPUs is weaker, and `--backend cpu` is the fallback |
+| Windows x64 | CUDA / Vulkan / ROCm / CPU | **Not run.** Archive selection and download URLs verified |
+| Linux x86-64 | Vulkan / ROCm / CPU | **Not run.** Archive selection and download URLs verified |
+| Linux aarch64 | — | No prebuilt archive upstream; build from source (below) |
+
+What *has* been checked for Windows and Linux: backend archive selection for
+all nine platform/GPU combinations resolves to the right release asset, both
+against the live GitHub API and against the pinned fallback names, and every
+one of those asset URLs returns a valid size. What has **not** been checked is
+anything requiring the hardware — that the binaries actually launch, that GPU
+detection reads the right thing from `nvidia-smi`/`rocminfo`/`Win32_VideoController`,
+that the Windows CUDA build finds its companion `cudart` DLLs, or that Vulkan
+on an NVIDIA card performs reasonably.
+
+The most likely places for a first bug on those platforms are GPU detection
+(`qwenimg doctor` prints what it found) and the Windows CUDA runtime DLLs. Both
+have escape hatches: `QWENIMG_BACKEND=vulkan` to force a flavour and
+`QWENIMG_SD_CLI=/path/to/sd-cli` to bypass the download entirely.
+
 ## Requirements
 
 Python 3.8+ and about 15 GB of free disk. Everything else is fetched.
 
-Prebuilt backends cover Windows x64, Linux x86-64 and macOS arm64 (the macOS
-archive is universal, so Intel Macs work as well). On other platforms —
-Linux aarch64, for instance — build stable-diffusion.cpp yourself and point the
-tool at it:
+Where no prebuilt backend exists (see [Platform status](#platform-status)),
+build stable-diffusion.cpp yourself and point the tool at it:
 
 ```sh
 git clone --recursive https://github.com/leejet/stable-diffusion.cpp
