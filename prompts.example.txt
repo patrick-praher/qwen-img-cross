@@ -1,0 +1,6 @@
+# One prompt per line. Blank lines and lines starting with '#' are ignored.
+# Run with:  qwenimg -f prompts.example.txt
+
+a red fox curled up in deep snow, soft winter light, shallow depth of field
+an overgrown greenhouse at golden hour, shafts of dust in the light, 35mm film
+a cutaway illustration of a mechanical pocket watch, technical, clean line art
