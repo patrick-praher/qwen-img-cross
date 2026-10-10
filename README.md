@@ -165,14 +165,52 @@ channel and the background is transparent.` Keep the output as `.png`.
 
 ## Where things go
 
+Generated images land in the working directory; everything downloaded lands in
+a cache outside the repo, so multi-gigabyte weights can never be committed by
+accident.
+
 | | |
 | --- | --- |
 | Images | `./outputs/<timestamp>_s<seed>_<slug>.png` |
 | Generation log | `./outputs/index.jsonl` (prompt, seed and settings per run) |
-| Backend + weights | macOS `~/Library/Caches/qwenimg`, Linux `~/.cache/qwenimg`, Windows `%LOCALAPPDATA%\qwenimg` |
+| Backend + weights | the model cache, below |
 
 Generation parameters are also embedded in each PNG; read them back with
 `sd-cli -M metadata --image out.png`.
+
+### Model cache
+
+| OS | Location |
+| --- | --- |
+| macOS | `~/Library/Caches/qwenimg` |
+| Linux | `$XDG_CACHE_HOME/qwenimg`, else `~/.cache/qwenimg` |
+| Windows | `%LOCALAPPDATA%\qwenimg` |
+
+```
+qwenimg/
+├── models/
+│   ├── uncensored/   the diffusion model, VAE and text encoder (~11 GB)
+│   └── loras/        the turbo LoRA (0.9 GB), shared by both variants
+├── backend/<release>_<flavour>/   sd-cli, sd-server and their library
+└── downloads/        the backend archive it was extracted from (deletable)
+```
+
+Weights are keyed by variant and filename, so nothing is overwritten in place:
+`--variant base` downloads alongside `uncensored/` rather than replacing it,
+and switching quant fetches a second file while keeping the first. That is
+convenient for comparing, and it adds up — `qwenimg models` prints the resolved
+paths and which files are present, and `qwenimg clean` removes the backend and
+archives while keeping the weights (`--all` drops those too, after asking).
+
+To put the cache elsewhere — an external drive, say — set `QWENIMG_HOME`:
+
+```sh
+export QWENIMG_HOME=/Volumes/Big/qwenimg
+```
+
+Move the existing directory there first and nothing re-downloads: each file is
+skipped when it is already present at the expected size (add `--verify` to
+check SHA-256 as well).
 
 ## Environment variables
 
