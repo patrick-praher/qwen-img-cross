@@ -275,6 +275,34 @@ you want the CUDA path.
 * **Wrong backend chosen** — override with `QWENIMG_BACKEND=vulkan` and
   `--force-backend`.
 
+## About the code
+
+Fair warning: this is vibe-coded. Claude (Opus 5) wrote essentially all of it
+in one session while I steered; I did not review it line by line. It does the
+job — I use it — but do not mistake it for carefully crafted software.
+
+Concretely, what that means if you plan to touch it:
+
+* It is one ~1,650-line module. No package, no separation between the
+  downloader, the backend resolver and the CLI beyond section comments.
+* **No test suite in the repo.** The downloader, resume logic, platform
+  matrix and REPL were genuinely exercised during the session — including
+  interrupt/resume against a local range server and a server that ignores
+  Range headers — but none of that was committed, so nothing stops a
+  regression.
+* No CI, no linting config, no type checking, despite the annotations.
+* Error handling is uniformly "print a message and exit". Fine for a CLI,
+  useless if you want to import any of it.
+* Only macOS has been run on real hardware — see
+  [Platform status](#platform-status).
+
+The parts I would trust most are the ones that were tested hardest: the
+downloader's integrity checks and the release-asset matrix. The parts I would
+trust least are the ones no machine here could exercise — Windows CUDA DLL
+handling above all.
+
+PRs welcome, and so is ripping chunks of it out.
+
 ## Licensing
 
 This script is yours to use as you like. The model weights are not: the
