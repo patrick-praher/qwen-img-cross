@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import locale
 import os
 import platform
 import random
@@ -213,6 +214,21 @@ def human(n: float | None) -> str:
 def slugify(text: str, limit: int = 48) -> str:
     s = re.sub(r"[^a-zA-Z0-9]+", "-", text.strip().lower()).strip("-")
     return (s[:limit].rstrip("-") or "image")
+
+
+def decode_text(data: bytes) -> str:
+    """Decode text as Windows tools write it: UTF-8 with or without a BOM
+    (Notepad, Set-Content), or UTF-16 (Windows PowerShell's `>`/Out-File)."""
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return data.decode("utf-16")
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError:       # legacy ANSI code page, e.g. cmd's echo
+        return data.decode(locale.getpreferredencoding(False), errors="replace")
+
+
+def read_text(path: Path) -> str:
+    return decode_text(path.read_bytes())
 
 
 def round32(v: int) -> int:
@@ -1120,12 +1136,12 @@ def _record(outdir: Path, prompt: str, seed: int, opts: dict,
 
 def read_prompts(path: str, *, whole: bool = False) -> list[str]:
     if path == "-":
-        text = sys.stdin.read()
+        text = decode_text(sys.stdin.buffer.read())
     else:
         p = Path(path).expanduser()
         if not p.exists():
             die(f"prompt file not found: {p}")
-        text = p.read_text(encoding="utf-8")
+        text = read_text(p)
     if whole:
         # The whole file is one prompt, newlines included.
         if not text.strip():
@@ -1266,7 +1282,7 @@ def load_config(explicit: str | None) -> dict:
     for path in candidates:
         if path.exists():
             try:
-                data = json.loads(path.read_text(encoding="utf-8"))
+                data = json.loads(read_text(path))
             except json.JSONDecodeError as exc:
                 die(f"{path}: invalid JSON ({exc})")
             if not isinstance(data, dict):
@@ -1402,8 +1418,7 @@ def resolve_opts(args) -> dict:
     if args.negative is not None:
         opts["negative"] = args.negative
     if args.negative_file:
-        opts["negative"] = Path(args.negative_file).expanduser().read_text(
-            encoding="utf-8").strip()
+        opts["negative"] = read_text(Path(args.negative_file).expanduser()).strip()
     if args.no_fa:
         opts["flash_attn"] = False
     if args.mmap:
