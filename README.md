@@ -13,8 +13,9 @@ toolkit. The backend binary and the model weights are downloaded on first use.
   **file** (one prompt per line) or from **stdin**
 
 > [!NOTE]
-> **Tested on macOS (Apple silicon, Metal) only.** The Windows and Linux paths
-> are implemented but have not yet been run on real hardware — see
+> **Tested on macOS (Apple silicon, Metal) and Windows (NVIDIA, CUDA).** The
+> Linux paths and the other Windows backends are implemented but have not yet
+> been run on real hardware — see
 > [Platform status](#platform-status). Reports from either are very welcome.
 
 ## Quick start
@@ -117,6 +118,12 @@ The turbo run was both faster *and* visibly better here, because 12 steps at
 cfg 6 is well short of convergence for this model — the full model wants ~20-30
 steps, which on this hardware is 15-25 minutes per image. Reach for `--turbo`
 for anything interactive, and drop it when you want the undistilled model.
+
+On Windows with an RTX 2080 Ti (11 GB, CUDA, `q4_k_m` picked by `--quant auto`),
+`--turbo` at the default 1344x1344 took 76 s end to end: 3 s text encoding,
+42 s sampling, 28 s VAE decode. The decode does not fit in 11 GB at full size;
+stable-diffusion.cpp logs `vae decode compute failed`, then retries with
+spatial tiling and succeeds on its own — that error line is expected.
 
 `--turbo` logs `Only (569 / 665) LoRA tensors have been applied` plus a run of
 `unused lora tensor` warnings. That is stable-diffusion.cpp declining to map the
@@ -228,22 +235,29 @@ check SHA-256 as well).
 | --- | --- | --- |
 | macOS, Apple silicon | Metal | Verified end to end on an M5 (32 GB) |
 | macOS, Intel | Metal / CPU | Not run. The macOS archive is a universal binary (`x86_64 arm64` confirmed with `lipo`), so it should execute; Metal coverage on Intel GPUs is weaker, and `--backend cpu` is the fallback |
-| Windows x64 | CUDA / Vulkan / ROCm / CPU | **Not run.** Archive selection and download URLs verified |
+| Windows x64, NVIDIA | CUDA | Verified end to end on an RTX 2080 Ti (11 GB), Windows Server 2025, Python 3.12 |
+| Windows x64, other | Vulkan / ROCm / CPU | **Not run.** Archive selection and download URLs verified |
 | Linux x86-64 | Vulkan / ROCm / CPU | **Not run.** Archive selection and download URLs verified |
 | Linux aarch64 | — | No prebuilt archive upstream; build from source (below) |
 
-What *has* been checked for Windows and Linux: backend archive selection for
-all nine platform/GPU combinations resolves to the right release asset, both
-against the live GitHub API and against the pinned fallback names, and every
-one of those asset URLs returns a valid size. What has **not** been checked is
-anything requiring the hardware — that the binaries actually launch, that GPU
-detection reads the right thing from `nvidia-smi`/`rocminfo`/`Win32_VideoController`,
-that the Windows CUDA build finds its companion `cudart` DLLs, or that Vulkan
-on an NVIDIA card performs reasonably.
+On Windows/NVIDIA the full path has been exercised: `nvidia-smi` detection,
+VRAM-based quant choice, the CUDA archive plus its companion `cudart` DLL
+archive (the binary finds the DLLs; `qwenimg doctor` lists `CUDA0`), the
+`qwenimg.cmd` launcher, and a turbo generation. Prompt files and stdin are read
+whatever encoding Windows tools produce — UTF-8 with or without a BOM (Notepad,
+`Set-Content`) and UTF-16 (Windows PowerShell's `>`/`Out-File`).
 
-The most likely places for a first bug on those platforms are GPU detection
-(`qwenimg doctor` prints what it found) and the Windows CUDA runtime DLLs. Both
-have escape hatches: `QWENIMG_BACKEND=vulkan` to force a flavour and
+What has been checked for the remaining platforms: backend archive selection
+for all nine platform/GPU combinations resolves to the right release asset,
+both against the live GitHub API and against the pinned fallback names, and
+every one of those asset URLs returns a valid size. What has **not** been
+checked is anything requiring that hardware — that the binaries launch, that
+GPU detection reads the right thing from `rocminfo`/`Win32_VideoController`, or
+that Vulkan on an NVIDIA card performs reasonably.
+
+The most likely place for a first bug on those platforms is GPU detection
+(`qwenimg doctor` prints what it found). It has escape hatches:
+`QWENIMG_BACKEND=vulkan` to force a flavour and
 `QWENIMG_SD_CLI=/path/to/sd-cli` to bypass the download entirely.
 
 ## Requirements
@@ -293,13 +307,13 @@ Concretely, what that means if you plan to touch it:
 * No CI, no linting config, no type checking, despite the annotations.
 * Error handling is uniformly "print a message and exit". Fine for a CLI,
   useless if you want to import any of it.
-* Only macOS has been run on real hardware — see
+* Only macOS (Metal) and Windows (CUDA) have been run on real hardware — see
   [Platform status](#platform-status).
 
 The parts I would trust most are the ones that were tested hardest: the
 downloader's integrity checks and the release-asset matrix. The parts I would
-trust least are the ones no machine here could exercise — Windows CUDA DLL
-handling above all.
+trust least are the ones no machine here could exercise — GPU detection and
+the backends on Linux and on non-NVIDIA Windows machines.
 
 PRs welcome, and so is ripping chunks of it out.
 
